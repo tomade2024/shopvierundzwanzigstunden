@@ -74,7 +74,7 @@ else:
 
 with st.expander("So passt du die App an"):
     st.code(
-        '''FORM_URL = "HIER_DEIN_GOOGLE_FORM_LINK"
+        '''FORM_URL = "https://forms.gle/fuFw7HV8dxeH4Hjw7"
 START_TIME = datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc)
 DURATION_HOURS = 24
 MANUAL_MODE = "open"  # open | waitlist | closed''',
