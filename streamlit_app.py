@@ -9,8 +9,8 @@ st.set_page_config(page_title="Patch Vorbestellung", page_icon="🎖️", layout
 # Einstellungen
 # =========================
 FORM_URL = "https://forms.gle/EjwizyDncYcpHTUf7"
-START_TIME = datetime(2026, 4, 15, 18, 0, 0, tzinfo=timezone.utc)
-DURATION_HOURS = 24
+START_TIME = datetime(2026, 4, 14, 12, 35, 0, tzinfo=timezone.utc)
+DURATION_HOURS = 6
 END_TIME = START_TIME + timedelta(hours=DURATION_HOURS)
 MAX_PATCHES = 100
 MAX_PER_PERSON = 2
