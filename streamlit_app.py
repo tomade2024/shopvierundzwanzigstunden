@@ -1,151 +1,96 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+st.set_page_config(page_title="Patch Vorbestellung", page_icon="🎖️", layout="centered")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# =========================
+# Einstellungen
+# =========================
+FORM_URL = "https://forms.gle/fuFw7HV8dxeH4Hjw7"
+START_TIME = datetime(2026, 4, 15, 18, 0, 0, tzinfo=timezone.utc)
+DURATION_HOURS = 24
+END_TIME = START_TIME + timedelta(hours=DURATION_HOURS)
+MAX_PATCHES = 100
+MAX_PER_PERSON = 2
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Optional: Wenn du den aktuellen Status manuell umschalten willst
+# Werte: "open", "waitlist", "closed"
+MANUAL_MODE = "open"
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+def get_status(now_utc: datetime) -> str:
+    if MANUAL_MODE == "closed":
+        return "closed"
+    if MANUAL_MODE == "waitlist":
+        return "waitlist"
+    if now_utc < START_TIME:
+        return "not_started"
+    if now_utc >= END_TIME:
+        return "closed"
+    return "open"
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+def format_dt(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%d.%m.%Y, %H:%M UTC")
+
+
+now = datetime.now(timezone.utc)
+status = get_status(now)
+remaining = END_TIME - now
+
+st.title("Patch Vorbestellung")
+st.caption("Limitierte Vorbestellung für 24 Stunden")
+
+with st.container(border=True):
+    st.markdown(
+        f"""
+**Wichtige Hinweise**
+
+- Insgesamt limitiert auf **{MAX_PATCHES} Patches**
+- Maximal **{MAX_PER_PERSON} Patches pro Person**
+- **Kein Versand**
+- **Abholung am 18.04.2026 ab 10:00 Uhr am Stand**
+- Nach Erreichen des Limits erfolgt Eintragung auf die **Warteliste**
+        """
     )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+col1, col2 = st.columns(2)
+col1.metric("Start", format_dt(START_TIME))
+col2.metric("Ende", format_dt(END_TIME))
 
-    return gdp_df
+if status == "not_started":
+    st.info("Die Vorbestellung hat noch nicht begonnen.")
+elif status == "open":
+    hours_left = max(int(remaining.total_seconds() // 3600), 0)
+    minutes_left = max(int((remaining.total_seconds() % 3600) // 60), 0)
+    st.success(f"Die Vorbestellung ist geöffnet. Noch {hours_left} Std. {minutes_left} Min. verbleibend.")
+    st.link_button("Jetzt vorbestellen", FORM_URL, use_container_width=True)
+elif status == "waitlist":
+    st.warning("Das Kontingent ist erreicht. Neue Einträge gehen auf die Warteliste.")
+    st.link_button("Zur Warteliste", FORM_URL, use_container_width=True)
+else:
+    st.error("Die 24-Stunden-Vorbestellung ist beendet.")
+    st.button("Vorbestellung geschlossen", disabled=True, use_container_width=True)
 
-gdp_df = get_gdp_data()
+with st.expander("So passt du die App an"):
+    st.code(
+        '''FORM_URL = "HIER_DEIN_GOOGLE_FORM_LINK"
+START_TIME = datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc)
+DURATION_HOURS = 24
+MANUAL_MODE = "open"  # open | waitlist | closed''',
+        language="python",
+    )
+    st.markdown(
+        """
+- `FORM_URL`: Link zu deinem Google-Formular
+- `START_TIME`: Start der Aktion
+- `DURATION_HOURS`: Laufzeit der Aktion
+- `MANUAL_MODE`:
+  - `open` = normal geöffnet
+  - `waitlist` = Button bleibt aktiv, aber Seite zeigt Warteliste
+  - `closed` = komplett geschlossen
+        """
+    )
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+st.divider()
+st.caption("Hinweis: Die eigentliche Vergabe von BESTÄTIGT oder WARTELISTE sollte weiter im Google-Formular bzw. Google-Sheet erfolgen.")
